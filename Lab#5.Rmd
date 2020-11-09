@@ -1,0 +1,176 @@
+---
+title: "Labe_5"
+author: "Jack Langenwalter"
+date: "11/8/2020"
+output: html_document
+---
+```{r}
+acc <- read.csv("https://raw.githubusercontent.com/xdaiISU/ds202materials/master/hwlabs/fars2017/accident.csv", stringsAsFactors = FALSE)
+```
+
+```{r}
+person <- read.csv("https://raw.githubusercontent.com/xdaiISU/ds202materials/master/hwlabs/fars2017/person.csv", stringsAsFactors = FALSE)
+```
+
+```{r}
+library(readxl)
+FRPP_GLC_United_StatesSep292020 <- read_excel("~/Downloads/FRPP_GLC_-_United_StatesSep292020.xlsx")
+```
+
+```{r}
+library(readr)
+```
+## 1.Day 7 has the most distinct cases on record with 5,873
+```{r}
+library(ggplot2)
+library(dplyr)
+acc %>%
+  group_by(DAY_WEEK) %>%
+  summarise(n_distinct(ST_CASE))
+```
+2. 
+```{r}
+fatal_person<- filter(person, INJ_SEV==4)
+fatal_person %>% 
+  group_by(MAKE, STATE) %>%
+  summarise(n_distinct(ST_CASE))
+```
+3. 
+```{r}
+fatal_acc<- filter(person, INJ_SEV==4)
+top_makes<-fatal_acc %>%
+  filter(!is.na(MAKE)) %>%
+  group_by(STATE, MAKE) %>%
+  summarise(num_cases = n_distinct(ST_CASE)) %>%
+  arrange(desc(num_cases), .by_group = TRUE) %>%
+  mutate(rank = row_number()) %>%
+  filter(rank==1)
+top_makes
+```
+
+```{r}
+
+FRPP_GLC_United_StatesSep292020$StateCode<-as.numeric(FRPP_GLC_United_StatesSep292020$`State Code`)
+state_lookup<-FRPP_GLC_United_StatesSep292020 %>%
+  group_by(state = `State Name`) %>%
+  summarise(StateCode=mean(StateCode))
+head(state_lookup)
+
+
+top_makes<-merge(state_lookup, top_makes, by.x="StateCode", by.y = "STATE")
+top_makes$MAKE <- as.character(top_makes$MAKE)
+
+
+head(top_makes)
+
+
+
+
+```
+4.
+```{r}
+library(usmap)
+library(ggplot2)
+
+plot_usmap(data = top_makes, values = "MAKE", color = "black", labels = TRUE) +
+  scale_fill_discrete(name = "Make")
+  labs(title = "US States")
+```
+
+5.
+```{r}
+acc_person <- merge(acc, person, by = "ST_CASE")
+head(acc_person)
+```
+6.
+```{r}
+tallies<- acc_person %>%
+  group_by(DAY_WEEK, HOUR.x, SEX) %>%
+  summarise(num_acc=n_distinct(ST_CASE))
+
+by_hour<- tallies %>%
+  group_by(HOUR.x) %>%
+  filter(HOUR.x != 99) %>%
+  summarise(num_acc = sum(num_acc))
+
+by_weekday<- tallies %>%
+  group_by(DAY_WEEK) %>%
+  summarise(num_acc = sum(num_acc))
+
+by_sex<- tallies %>%
+  group_by(SEX) %>%
+  summarise(num_acc = sum(num_acc))
+
+
+head(tallies)
+
+ggplot(by_weekday, aes(x=DAY_WEEK, y=num_acc)) +
+  geom_bar(stat = "identity")
+
+
+by_sex$SEX <- as.character(by_sex$SEX)
+ggplot(by_sex, aes(x=SEX, y=num_acc)) +
+  geom_bar(stat = "identity")
+
+
+
+ggplot(by_hour, aes(x=HOUR.x, y=num_acc)) +
+  geom_line() + 
+  geom_point()
+```
+7. 
+```{r}
+FRPP_GLC_United_StatesSep292020$`County Code` <- as.numeric(FRPP_GLC_United_StatesSep292020$`County Code`)
+county_lookup<-FRPP_GLC_United_StatesSep292020 %>%
+  group_by(county = `County Name`, `State Name`, `State Code`) %>%
+  summarise(countyCode=mean(`County Code`), )
+head(county_lookup)
+
+
+
+
+
+```
+
+8. ##
+```{r}
+by_month<- acc %>%
+  group_by(MONTH) %>%
+  summarise(num_acc = n_distinct(ST_CASE))
+
+ggplot(by_month, aes(x=MONTH, y=num_acc)) +
+  geom_line() + 
+  geom_point()
+
+by_month<- acc %>%
+  group_by(MONTH, STATE) %>%
+  summarise(num_acc = n_distinct(ST_CASE))
+
+by_month <- merge(by_month, state_lookup, by.x = "STATE", by.y = "StateCode")
+
+total_month <- by_month %>%
+  group_by(state) %>%
+  summarise(num_acc = sum(num_acc))
+plot_usmap(data = total_month, values = "num_acc", color = "black") +
+  scale_fill_continuous(low = "white", high = "navy", name = "Accidents") +
+  labs(title = "Total Accidents by State")
+
+winter<- by_month %>%
+  filter(MONTH %in% c(10, 11, 12, 1, 2)) %>%
+  group_by(state) %>%
+  summarise(num_acc = sum(num_acc))
+
+plot_usmap(data = winter, values = "num_acc", color = "black") +
+  scale_fill_continuous(low = "white", high = "navy", name = "Accidents", limits = c(0, 1500)) +
+  labs(title = "Winter Months")
+
+summer<- by_month %>%
+  filter(MONTH %in% c(5, 6, 7, 8, 9)) %>%
+  group_by(state) %>%
+  summarise(num_acc = sum(num_acc))
+
+plot_usmap(data = summer, values = "num_acc", color = "black") +
+  scale_fill_gradient(low = "white", high = "navy", name = "Accidents", limits = c(0, 1500)) +
+  labs(title = "Summer Months")
+```
+
